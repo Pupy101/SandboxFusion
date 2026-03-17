@@ -32,6 +32,14 @@ from sandbox.runners import (
     RunJupyterRequest,
     run_jupyter,
 )
+from sandbox.runners.docker_runner import run_code_in_docker
+from sandbox.server.sessions import (
+    create_session,
+    execute_session,
+    finish_session,
+    list_files,
+    upload_files,
+)
 
 sandbox_router = APIRouter()
 logger = structlog.stdlib.get_logger()
@@ -46,6 +54,7 @@ class RunCodeRequest(BaseModel):
     language: Language = Field(..., examples=['python'], description='the language or execution mode to run the code')
     files: Dict[str, Optional[str]] = Field({}, description='a dict from file path to base64 encoded file content')
     fetch_files: List[str] = Field([], description='a list of file paths to fetch after code execution')
+    image: Optional[str] = Field(None, description='optional custom docker image for execution')
 
 
 class RunStatus(str, Enum):
@@ -101,6 +110,11 @@ def parse_run_status(result: CodeRunResult) -> Tuple[RunStatus, str]:
     return RunStatus.Success, ''
 
 
+@sandbox_router.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 @sandbox_router.post("/run_code", response_model=RunCodeResponse, tags=['sandbox'])
 async def run_code(request: RunCodeRequest):
     resp = RunCodeResponse(status=RunStatus.Success, message='', executor_pod_name=os.environ.get('MY_POD_NAME'))
@@ -108,7 +122,11 @@ async def run_code(request: RunCodeRequest):
         logger.debug(
             f'start processing {request.language} request with code ```\n{request.code[:100]}\n``` and files {list(request.files.keys())}...(memory_limit: {request.memory_limit_MB}MB)'
         )
-        result = await CODE_RUNNERS[request.language](CodeRunArgs(**request.model_dump()))
+        args = CodeRunArgs(**request.model_dump(exclude={'language'}))
+        if request.image:
+            result = await run_code_in_docker(args, request.language)
+        else:
+            result = await CODE_RUNNERS[request.language](args)
 
         resp.compile_result = result.compile_result
         resp.run_result = result.run_result
@@ -123,6 +141,50 @@ async def run_code(request: RunCodeRequest):
         resp.status = RunStatus.SandboxError
 
     return resp
+
+
+class SessionCreateRequest(BaseModel):
+    ttl: int = Field(1800, description='seconds of inactivity before auto-finish')
+    image: Optional[str] = Field(None, description='docker image for session')
+    memory: int = Field(512, description='memory limit MB')
+    cpu: float = Field(1.0, description='CPU limit')
+
+
+class SessionExecuteRequest(BaseModel):
+    code: str = Field(..., description='code to execute')
+
+
+class SessionFilesRequest(BaseModel):
+    files: Dict[str, str] = Field(..., description='path -> base64 content')
+
+
+@sandbox_router.post("/sessions")
+async def session_create(req: SessionCreateRequest):
+    session_id = create_session(ttl=req.ttl, image=req.image, memory=req.memory, cpu=req.cpu)
+    return {"id": session_id}
+
+
+@sandbox_router.post("/sessions/{session_id}/execute")
+async def session_execute(session_id: str, req: SessionExecuteRequest):
+    return execute_session(session_id, req.code)
+
+
+@sandbox_router.post("/sessions/{session_id}/files")
+async def session_upload_files(session_id: str, req: SessionFilesRequest):
+    uploaded = upload_files(session_id, req.files)
+    return {"uploaded": uploaded}
+
+
+@sandbox_router.get("/sessions/{session_id}/files")
+async def session_list_files(session_id: str):
+    files = list_files(session_id)
+    return {"files": files}
+
+
+@sandbox_router.post("/sessions/{session_id}/finish")
+async def session_finish(session_id: str):
+    finish_session(session_id)
+    return {"status": "finished"}
 
 
 @sandbox_router.post("/run_jupyter", name='Run Code in Jupyter', response_model=RunJupyterResponse, tags=['sandbox'])
