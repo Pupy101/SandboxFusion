@@ -89,22 +89,23 @@ docker run -d --rm --privileged -p 8080:8080 code_sandbox:server make run-online
 
 **Manual**
 
-Prerequisites: [conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html), [poetry](https://python-poetry.org/docs/#installation)
+Prerequisites: [uv](https://docs.astral.sh/uv/) (Python package manager)
 
 To install the sandbox service:
 
 ```bash
-conda create -n sandbox -y python=3.12
-conda activate sandbox
-poetry install
+# Install uv if not present: curl -LsSf https://astral.sh/uv/install.sh | sh
+uv sync
 # to build the real docs, run `cd docs && npm ci && npm run build`
 mkdir -p docs/build
+# Install Python runtime for user code execution
+cd runtime/python && bash install-python-runtime.sh && cd ../..
 make run-online
 ```
 
 Please refer to `scripts/Dockerfile.base` for the runtime of each supported language, and `scripts/Dockerfile.server` for the installation of extra packages for python and nodejs.
 
-For example, if you want to support execution of python code, you should install `install-python-runtime.sh`
+For example, if you want to support execution of python code, you should run `install-python-runtime.sh`:
 ```bash
 cd runtime/python
 bash install-python-runtime.sh

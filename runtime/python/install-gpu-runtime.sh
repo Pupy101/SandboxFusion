@@ -1,11 +1,19 @@
+#!/bin/bash
 set -o errexit
 
-rm -f ~/.condarc
-conda create -n sandbox-runtime -y python=3.10
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
-source activate sandbox-runtime
+# Install CPU runtime first (creates .venv with Python 3.11 and base packages)
+bash ./install-python-runtime.sh
 
+# Activate venv
+source .venv/bin/activate
+
+# Install PyTorch with CUDA
 bash ./install-pytorch.sh 2.2.1 12.1.0
-pip install "numpy<2.0.0"
 
-conda clean --all -y
+# Pin numpy for GPU compatibility
+uv pip install "numpy<2.0.0"
+
+uv cache clean

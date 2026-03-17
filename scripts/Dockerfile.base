@@ -10,13 +10,13 @@ RUN bash ./scripts/tuna-apt.sh 20.04 \
     bc \
     && mkdir -p /workspace/download
 
-# python 3.11 & poetry
+# python 3.11 & uv
 COPY ./scripts/install-miniconda.sh ./scripts/install-miniconda.sh
 RUN bash ./scripts/install-miniconda.sh 3.11
 ENV PATH="/root/miniconda3/bin:${PATH}"
 RUN wget https://veml.tos-cn-beijing.volces.com/condarc -O ~/.condarc && \
     pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/
-RUN curl -sSL https://install.python-poetry.org | POETRY_VERSION=1.7.0 python3 -
+RUN pip install uv
 ENV PATH=/root/.local/bin:$PATH
 
 # golang 1.23.3
@@ -85,7 +85,7 @@ RUN cd /workspace \
     && git clone https://github.com/NVlabs/verilog-eval \
     && cd verilog-eval && git checkout 4b9b16e92f1d9cc520afbfa3ecd5a2f20a350fd5 \
     && sed -i '79d;112d' ./verilog_eval/execution.py \
-    && cd ../ && pip install -e verilog-eval
+    && cd ../ && uv pip install -e verilog-eval
 
 # lean 4
 RUN curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain leanprover/lean4:v4.10.0-rc2
