@@ -15,8 +15,8 @@ RUN cd ./runtime/node && npm ci && \
 # cache dotnet
 RUN dotnet new console -o /tmp/dotnet && dotnet run --project /tmp/dotnet
 
-# cache lean (lake update fixes "manifest out of date" for mathlib)
-RUN cd ./runtime/lean && lake update && lake build
+# cache lean (без lake update — он тянет mathlib, несовместимый с Lean 4.10.0-rc2)
+RUN cd ./runtime/lean && lake build
 
 # Python runtime (conda env + uv pip, CPU torch) and sandbox server (uv sync)
 RUN pip install uv \
