@@ -15,8 +15,8 @@ RUN cd ./runtime/node && npm ci && \
 # cache dotnet
 RUN dotnet new console -o /tmp/dotnet && dotnet run --project /tmp/dotnet
 
-# cache lean
-RUN cd ./runtime/lean && lake build
+# cache lean (lake update fixes "manifest out of date" for mathlib)
+RUN cd ./runtime/lean && lake update && lake build
 
 # Python runtime (conda env + uv pip, CPU torch) and sandbox server (uv sync)
 RUN pip install uv \
@@ -29,6 +29,9 @@ ENV OMP_NUM_THREADS=2
 
 # Required for find_conda_root when server runs from uv .venv
 ENV CONDA_ROOT=/root/miniconda3
+
+# isolation=none: avoids pthread/thread restrictions that break nodejs, julia, ruby, etc.
+ENV SANDBOX_CONFIG=local
 
 RUN cd ./docs \
     && npm ci \
