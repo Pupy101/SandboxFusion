@@ -17,15 +17,21 @@ if ! command -v uv &> /dev/null; then
     pip install uv
 fi
 
-# Create venv with Python 3.11 (fixes contourpy and other packages requiring 3.11+)
-uv venv --python 3.11 .venv
-source .venv/bin/activate
+# Initialize conda (for Docker/CI where conda may not be in shell)
+if [ -f "${CONDA_ROOT:-/root/miniconda3}/etc/profile.d/conda.sh" ]; then
+    source "${CONDA_ROOT:-/root/miniconda3}/etc/profile.d/conda.sh"
+fi
 
-# Install packages
+# Create conda env with Python 3.11 (fixes contourpy and other packages requiring 3.11+)
+conda create -n sandbox-runtime -y python=3.11
+
+conda activate sandbox-runtime
+
+# Install packages with uv (CPU-only torch: --index-url to PyPI/mirror excludes CUDA wheels)
 if [ $USE_OFFICIAL_SOURCE -eq 0 ]; then
     uv pip install --index-url https://mirrors.aliyun.com/pypi/simple/ -r ./requirements.txt
 else
-    uv pip install -r ./requirements.txt
+    uv pip install --index-url https://pypi.org/simple/ -r ./requirements.txt
 fi
 
 # for NaturalCodeBench python problem 29
@@ -35,3 +41,4 @@ python -c "import nltk; nltk.download('punkt')"
 python -c "import nltk; nltk.download('stopwords')"
 
 uv cache clean
+conda clean --all -y

@@ -23,7 +23,7 @@ import structlog
 from sandbox.configs.run_config import RunConfig
 from sandbox.runners.base import restore_files, run_command_bare, run_commands
 from sandbox.runners.types import CodeRunArgs, CodeRunResult, CommandRunStatus
-from sandbox.utils.common import ensure_php_tag_in_string, find_sandbox_runtime_venv
+from sandbox.utils.common import ensure_php_tag_in_string, find_conda_root
 from sandbox.utils.execution import get_tmp_dir
 from sandbox.utils.extraction import find_java_public_class_name
 
@@ -33,11 +33,16 @@ config = RunConfig.get_instance_sync()
 
 @cache
 def get_python_rt_env(env_name: str):
-    """Get env dict with PATH pointing to sandbox runtime (uv .venv). env_name ignored for uv."""
-    venv_bin = find_sandbox_runtime_venv()
+    """Get env dict with PATH pointing to sandbox runtime (conda env)."""
+    r = subprocess.run(f'bash -c "source {find_conda_root()}/bin/activate {env_name} && which python"',
+                       capture_output=True,
+                       text=True,
+                       check=True,
+                       shell=True)
+    python_path = os.path.dirname(r.stdout.strip())
     original_paths = os.environ.get('PATH', '').split(':')
     filtered_path = ':'.join([p for p in original_paths if '/envs/sandbox/' not in p])
-    return {'PATH': f'{venv_bin}:{filtered_path}'}
+    return {'PATH': f'{python_path}:{filtered_path}'}
 
 
 __cpp_rt_flags = None

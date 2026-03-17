@@ -18,7 +18,7 @@ RUN dotnet new console -o /tmp/dotnet && dotnet run --project /tmp/dotnet
 # cache lean
 RUN cd ./runtime/lean && lake build
 
-# Python runtime (uv venv) and sandbox server (uv sync)
+# Python runtime (conda env + uv pip, CPU torch) and sandbox server (uv sync)
 RUN pip install uv \
     && cd ./runtime/python && bash install-python-runtime.sh \
     && cd /root/sandbox && uv sync
@@ -26,6 +26,9 @@ RUN pip install uv \
 # fix pyqt error, see https://github.com/NVlabs/instant-ngp/discussions/300
 ENV QT_QPA_PLATFORM=offscreen
 ENV OMP_NUM_THREADS=2
+
+# Required for find_conda_root when server runs from uv .venv
+ENV CONDA_ROOT=/root/miniconda3
 
 RUN cd ./docs \
     && npm ci \

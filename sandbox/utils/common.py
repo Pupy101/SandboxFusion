@@ -59,7 +59,12 @@ def cached_context(cm_factory):
 
 
 def find_conda_root():
-    """Deprecated: use find_sandbox_runtime_venv for uv-based runtime."""
+    """Find conda root for activating sandbox-runtime env."""
+    # Docker/CI: CONDA_ROOT set explicitly when server runs from uv .venv
+    conda_root = os.environ.get('CONDA_ROOT')
+    if conda_root and os.path.isdir(conda_root):
+        return conda_root
+
     try:
         python_executable = sys.executable
         env_root = python_executable
@@ -67,46 +72,25 @@ def find_conda_root():
 
         while current_dir:
             if env_root != current_dir and os.path.exists(os.path.join(current_dir, 'condabin')):
-                # This indicates we are in a Conda environment
                 conda_root = current_dir
                 break
             parent_dir = os.path.dirname(current_dir)
             if parent_dir == current_dir:
-                # We have reached the root of the filesystem
                 conda_root = None
                 break
             current_dir = parent_dir
 
         if conda_root and os.path.isdir(conda_root):
             return conda_root
-        else:
-            return "Conda root directory not found."
+
+        # Fallback: common conda locations
+        for path in ('/root/miniconda3', '/opt/conda', os.path.expanduser('~/miniconda3')):
+            if path and os.path.isdir(path) and os.path.exists(os.path.join(path, 'condabin')):
+                return path
+
+        return "Conda root directory not found."
     except Exception as e:
         return f"An unexpected error occurred: {e}"
-
-
-def find_sandbox_runtime_venv() -> str:
-    """
-    Find the sandbox runtime venv bin directory (uv-based .venv).
-    Returns path to bin/ for use in PATH.
-    """
-    venv_path = os.environ.get('SANDBOX_RUNTIME_VENV')
-    if venv_path:
-        bin_path = os.path.join(venv_path, 'bin')
-        if os.path.isdir(bin_path):
-            return bin_path
-
-    # Default: runtime/python/.venv relative to sandbox package
-    sandbox_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    default_venv = os.path.join(sandbox_root, 'runtime', 'python', '.venv')
-    bin_path = os.path.join(default_venv, 'bin')
-    if os.path.isdir(bin_path):
-        return bin_path
-
-    raise FileNotFoundError(
-        f'Sandbox runtime venv not found. Set SANDBOX_RUNTIME_VENV or ensure {default_venv} exists. '
-        'Run runtime/python/install-python-runtime.sh to create it.'
-    )
 
 
 def set_permissions_recursively(path, mode):
