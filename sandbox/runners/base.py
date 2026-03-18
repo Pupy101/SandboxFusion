@@ -22,7 +22,6 @@ from typing import Dict, List, Optional
 
 import psutil
 import structlog
-import platform
 import resource
 
 from sandbox.configs.run_config import RunConfig
@@ -122,17 +121,19 @@ async def run_commands(compile_command: Optional[str], run_command: str, cwd: st
             set_permissions_recursively(cwd, 0o777)
             preexec_steps.append(lambda: os.setuid(kwargs.get('set_uid')))
         
-        # Apply memory limit using resource module
+        # Apply memory limit using resource module.
+        # NOTE: RLIMIT_AS (virtual address space) is intentionally NOT set here.
+        # Modern runtimes (JVM, .NET CoreCLR, Node.js, Julia) pre-reserve gigabytes
+        # of virtual address space via mmap() even when physical usage is tiny.
+        # Setting RLIMIT_AS equal to memory_limit_MB causes them to crash at startup
+        # (HRESULT: 0x80070008, pthread_create EAGAIN, uv_thread_create failures).
+        # Physical memory is bounded by the container's mem_limit instead.
         if args.memory_limit_MB > 0:
             def memory_limit_preexec():
-                _, hard_memory_limit_AS = resource.getrlimit(resource.RLIMIT_AS)
-                _, hard_memory_limit_DATA = resource.getrlimit(resource.RLIMIT_DATA)
                 soft_memory_limit = args.memory_limit_MB * 1024 * 1024
-                resource.setrlimit(resource.RLIMIT_AS, (soft_memory_limit, hard_memory_limit_AS))
-                resource.setrlimit(resource.RLIMIT_DATA, (soft_memory_limit, hard_memory_limit_DATA))
-                if platform.uname().system != "Darwin":
-                    _, hard_memory_limit_STACK = resource.getrlimit(resource.RLIMIT_STACK)
-                    resource.setrlimit(resource.RLIMIT_STACK, (soft_memory_limit, hard_memory_limit_STACK))
+                _, hard_memory_limit_DATA = resource.getrlimit(resource.RLIMIT_DATA)
+                if hard_memory_limit_DATA == resource.RLIM_INFINITY or hard_memory_limit_DATA >= soft_memory_limit:
+                    resource.setrlimit(resource.RLIMIT_DATA, (soft_memory_limit, hard_memory_limit_DATA))
             preexec_steps.insert(0, memory_limit_preexec)
         preexec_fn = lambda: [step() for step in preexec_steps] if preexec_steps else None
         

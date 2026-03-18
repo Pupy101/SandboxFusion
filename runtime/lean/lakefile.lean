@@ -9,7 +9,7 @@ package «sandbox» where
   ]
 
 require mathlib from git
-  "https://github.com/leanprover-community/mathlib4.git"
+  "https://github.com/leanprover-community/mathlib4"
 
 lean_lib «Sandbox» where
   -- add library configuration options here
