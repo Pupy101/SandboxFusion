@@ -40,7 +40,6 @@ class CodeRunArgs(BaseModel):
     memory_limit_MB: int = -1
     stdin: Optional[str] = None
     fetch_files: List[str] = []
-    image: Optional[str] = None
 
 
 class CodeRunResult(BaseModel):

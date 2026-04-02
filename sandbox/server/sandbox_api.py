@@ -32,7 +32,6 @@ from sandbox.runners import (
     RunJupyterRequest,
     run_jupyter,
 )
-from sandbox.runners.docker_runner import run_code_in_docker
 from sandbox.server.sessions import (
     create_session,
     execute_session,
@@ -54,7 +53,6 @@ class RunCodeRequest(BaseModel):
     language: Language = Field(..., examples=['python'], description='the language or execution mode to run the code')
     files: Dict[str, Optional[str]] = Field({}, description='a dict from file path to base64 encoded file content')
     fetch_files: List[str] = Field([], description='a list of file paths to fetch after code execution')
-    image: Optional[str] = Field(None, description='optional custom docker image for execution')
 
 
 class RunStatus(str, Enum):
@@ -123,10 +121,7 @@ async def run_code(request: RunCodeRequest):
             f'start processing {request.language} request with code ```\n{request.code[:100]}\n``` and files {list(request.files.keys())}...(memory_limit: {request.memory_limit_MB}MB)'
         )
         args = CodeRunArgs(**request.model_dump(exclude={'language'}))
-        if request.image:
-            result = await run_code_in_docker(args, request.language)
-        else:
-            result = await CODE_RUNNERS[request.language](args)
+        result = await CODE_RUNNERS[request.language](args)
 
         resp.compile_result = result.compile_result
         resp.run_result = result.run_result
@@ -145,7 +140,6 @@ async def run_code(request: RunCodeRequest):
 
 class SessionCreateRequest(BaseModel):
     ttl: int = Field(1800, description='seconds of inactivity before auto-finish')
-    image: Optional[str] = Field(None, description='docker image for session')
     memory: int = Field(512, description='memory limit MB')
     cpu: float = Field(1.0, description='CPU limit')
 
@@ -160,7 +154,7 @@ class SessionFilesRequest(BaseModel):
 
 @sandbox_router.post("/sessions")
 async def session_create(req: SessionCreateRequest):
-    session_id = create_session(ttl=req.ttl, image=req.image, memory=req.memory, cpu=req.cpu)
+    session_id = create_session(ttl=req.ttl, memory=req.memory, cpu=req.cpu)
     return {"id": session_id}
 
 

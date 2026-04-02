@@ -20,7 +20,7 @@ import subprocess
 import tempfile
 import time
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 import structlog
 
@@ -50,18 +50,19 @@ def _session_workspace(session_id: str) -> str:
     return os.path.join(SESSION_DIR, session_id, "workspace")
 
 
+SESSION_IMAGE = "python:3.11-slim"
+
+
 def create_session(
     ttl: int = DEFAULT_TTL,
-    image: Optional[str] = None,
     memory: int = 512,
     cpu: float = 1.0,
 ) -> str:
     session_id = str(uuid.uuid4())
     workspace = os.path.join(SESSION_DIR, session_id, "workspace")
     os.makedirs(workspace, exist_ok=True)
-    img = image or "python:3.11-slim"
     mem_limit = f"-m {memory}m" if memory > 0 else ""
-    cmd = f"docker run -d --rm --network none {mem_limit} -v {workspace}:/workspace -w /workspace {img} sleep {ttl + 60}"
+    cmd = f"docker run -d --rm --network none {mem_limit} -v {workspace}:/workspace -w /workspace {SESSION_IMAGE} sleep {ttl + 60}"
     proc = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if proc.returncode != 0:
         raise RuntimeError(f"Failed to create container: {proc.stderr}")
@@ -81,9 +82,28 @@ def execute_session(session_id: str, code: str) -> dict[str, Any]:
     s = _sessions[session_id]
     container_id = s["container_id"]
     s["last_activity"] = time.time()
+
+    history: list[str] = s.setdefault("code_history", [])
+
+    # Replay history silently so variables/definitions from previous cells are
+    # available, then run the new cell with normal stdout/stderr.
+    script_parts: list[str] = []
+    if history:
+        script_parts += [
+            "import io as _io, sys as _sys",
+            "_old_out, _old_err = _sys.stdout, _sys.stderr",
+            "_sys.stdout = _sys.stderr = _io.StringIO()",
+        ]
+        script_parts.extend(history)
+        script_parts += [
+            "_sys.stdout, _sys.stderr = _old_out, _old_err",
+        ]
+    script_parts.append(code)
+
     code_path = os.path.join(s["workspace"], "_cell.py")
     with open(code_path, "w") as f:
-        f.write(code)
+        f.write("\n".join(script_parts))
+
     proc = subprocess.run(
         f"docker exec {container_id} python /workspace/_cell.py",
         shell=True,
@@ -91,11 +111,14 @@ def execute_session(session_id: str, code: str) -> dict[str, Any]:
         text=True,
         timeout=30,
     )
-    return {
+    result = {
         "status": "success" if proc.returncode == 0 else "error",
         "stdout": proc.stdout or "",
         "stderr": proc.stderr or "",
     }
+    if proc.returncode == 0:
+        history.append(code)
+    return result
 
 
 def upload_files(session_id: str, files: dict[str, str]) -> list[str]:
