@@ -55,8 +55,7 @@ SESSION_IMAGE = "python:3.11-slim"
 
 def create_session(
     ttl: int = DEFAULT_TTL,
-    memory: int = 512,
-    cpu: float = 1.0,
+    memory: int = -1,
 ) -> str:
     session_id = str(uuid.uuid4())
     workspace = os.path.join(SESSION_DIR, session_id, "workspace")

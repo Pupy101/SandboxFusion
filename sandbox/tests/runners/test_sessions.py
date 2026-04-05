@@ -12,10 +12,6 @@ docker_available = shutil.which("docker") is not None
 pytestmark = pytest.mark.skipif(not docker_available, reason="Docker not available")
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 def _create_session(**kwargs) -> str:
     resp = client.post("/sessions", json=kwargs)
     assert resp.status_code == 200, resp.text
@@ -28,10 +24,6 @@ def _finish(session_id: str) -> None:
     client.post(f"/sessions/{session_id}/finish")
 
 
-# ---------------------------------------------------------------------------
-# Lifecycle
-# ---------------------------------------------------------------------------
-
 def test_session_create_returns_id():
     session_id = _create_session()
     _finish(session_id)
@@ -43,10 +35,6 @@ def test_session_finish_returns_finished():
     assert resp.status_code == 200
     assert resp.json()["status"] == "finished"
 
-
-# ---------------------------------------------------------------------------
-# Execute
-# ---------------------------------------------------------------------------
 
 def test_session_execute_simple():
     session_id = _create_session()
@@ -61,7 +49,6 @@ def test_session_execute_simple():
 
 
 def test_session_execute_state_persists():
-    """Переменные, определённые в одном вызове, доступны в следующем."""
     session_id = _create_session()
     try:
         r1 = client.post(f"/sessions/{session_id}/execute", json={"code": "x = 42"})
@@ -107,10 +94,6 @@ def test_session_execute_not_found():
     assert "not found" in data["stderr"].lower()
 
 
-# ---------------------------------------------------------------------------
-# Files — upload
-# ---------------------------------------------------------------------------
-
 def test_session_upload_file():
     session_id = _create_session()
     try:
@@ -123,7 +106,6 @@ def test_session_upload_file():
 
 
 def test_session_upload_file_invalid_path_skipped():
-    """Путь с '..' должен быть отклонён — не попасть в uploaded."""
     session_id = _create_session()
     try:
         content = base64.b64encode(b"evil").decode()
@@ -143,10 +125,6 @@ def test_session_upload_file_not_found_session():
     assert resp.status_code == 200
     assert resp.json()["uploaded"] == []
 
-
-# ---------------------------------------------------------------------------
-# Files — list
-# ---------------------------------------------------------------------------
 
 def test_session_list_files_empty():
     session_id = _create_session()
@@ -177,12 +155,7 @@ def test_session_list_files_not_found_session():
     assert resp.json()["files"] == []
 
 
-# ---------------------------------------------------------------------------
-# Uploaded file accessible inside session
-# ---------------------------------------------------------------------------
-
 def test_session_execute_reads_uploaded_file():
-    """Загруженный файл должен быть виден Python-коду в /workspace."""
     session_id = _create_session()
     try:
         content = base64.b64encode(b"secret_value").decode()
@@ -195,10 +168,6 @@ def test_session_execute_reads_uploaded_file():
     finally:
         _finish(session_id)
 
-
-# ---------------------------------------------------------------------------
-# TTL / memory params (smoke — только создание)
-# ---------------------------------------------------------------------------
 
 def test_session_create_custom_ttl():
     session_id = _create_session(ttl=60)
